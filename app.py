@@ -1,8 +1,13 @@
 from flask import Flask, request, render_template
 from functions import send_whatsapp_messages, load_tokens
 from twilio.rest import Client
+from transformers import GPT2LMHeadModel, GPT2Tokenizer
+import os
 
 app = Flask(__name__)
+# Load the fine-tuned GPT-2 model and tokenizer
+model = GPT2LMHeadModel.from_pretrained("./scam_generator_model")
+tokenizer = GPT2Tokenizer.from_pretrained("./scam_generator_model")
 
 # Twilio credentials
 twilio_whatsapp_number = 'whatsapp:+14155238886'
@@ -16,28 +21,45 @@ account_sid = tokens.get("account_sid")
 auth_token = tokens.get("auth_token")
 
 
-@app.route('/', methods=['GET', 'POST'])
+@app.route('/')
 def index():
+    return render_template('index.html')
+
+@app.route('/generate', methods=['POST'])
+def generate_message():
+    scam_type = request.form.get('scam_type', 'Scam Message')
+    input_prompt = f"{scam_type}: "
+    input_ids = tokenizer.encode(input_prompt, return_tensors="pt")
+    output = model.generate(
+        input_ids,
+        min_length=50,
+        max_length=100,
+        do_sample=True,
+        top_k=50,
+        top_p=0.95,
+        temperature=0.7
+    )
+    generated_message = tokenizer.decode(output[0], skip_special_tokens=True)
+    return render_template('index.html', generated_message=generated_message)
+
+@app.route('/send', methods=['POST'])
+def send_message():
+    phone_number = request.form.get('phone_number')
+    message_body = request.form.get('message')
+    client = Client(account_sid, auth_token)
     success_message = None
     error_message = None
-    if request.method == 'POST':
-        # Get the message from the form
-        message_body = request.form.get('message')
-        
-        # Initialize Twilio client
-        client = Client(account_sid, auth_token)
-        
-        # Send the message
-        try:
-            message = client.messages.create(
-                from_=twilio_whatsapp_number,
-                body=message_body,
-                to=recipient_phone_number
-            )
-            success_message = "Message sent successfully!"
-        except Exception as e:
-            error_message = f"Failed to send message. Error: {str(e)}"
-    
+
+    try:
+        message = client.messages.create(
+            from_=twilio_whatsapp_number,
+            body=message_body,
+            to=f"whatsapp:{phone_number}"
+        )
+        success_message = "Message sent successfully!"
+    except Exception as e:
+        error_message = f"Failed to send message. Error: {str(e)}"
+
     return render_template('index.html', success_message=success_message, error_message=error_message)
 
 @app.route('/control')

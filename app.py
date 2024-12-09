@@ -42,7 +42,9 @@ def index():
 
 @app.route('/control')
 def control_center():
-    return render_template('control_center.html')
+    chart1_data = {'clicked': 30, 'ignored': 70}  # Example data
+    chart2_data = {'clicked': 8, 'ignored': 92}   # Example data
+    return render_template('control_center.html', chart1_data=chart1_data, chart2_data=chart2_data)
 
 
 if __name__ == '__main__':
